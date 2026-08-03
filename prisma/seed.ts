@@ -1,12 +1,12 @@
 import { PrismaClient } from '@prisma/client';
-import argon2 from 'argon2';
+import { hashPassword } from '../src/lib/password';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding sample data…');
 
-  const passwordHash = await argon2.hash('Password123', { type: argon2.argon2id });
+  const passwordHash = await hashPassword('Password123');
 
   const alice = await prisma.user.upsert({
     where: { email: 'alice@example.com' },
