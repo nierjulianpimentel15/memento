@@ -10,6 +10,7 @@ const nextConfig = {
   },
   experimental: {
     serverActions: { bodySizeLimit: '25mb' },
+    serverComponentsExternalPackages: ['argon2'],
   },
 };
 
