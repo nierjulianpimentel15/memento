@@ -1,0 +1,222 @@
+// Memento — private photo sharing platform
+// Prisma schema: normalized relational model for Postgres
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum GroupRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ReactionType {
+  HEART
+  SMILE
+  FIRE
+}
+
+enum NotificationType {
+  POST_UPLOADED
+  COMMENT_ADDED
+  GROUP_INVITE
+  MEMBER_JOINED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String
+  displayName   String
+  bio           String    @default("")
+  avatarUrl     String?
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions       Session[]
+  memberships    Membership[]
+  posts          Post[]
+  comments       Comment[]
+  reactions      Reaction[]
+  notifications  Notification[]
+  createdGroups  Group[]        @relation("GroupCreator")
+  createdInvites InviteCode[]
+  auditLogs      AuditLog[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  coverImage  String?
+  isPrivate   Boolean  @default(true)
+  creatorId   String
+  creator     User     @relation("GroupCreator", fields: [creatorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     Membership[]
+  posts       Post[]
+  inviteCodes InviteCode[]
+  notifications Notification[]
+
+  @@index([creatorId])
+}
+
+model Membership {
+  id       String    @id @default(cuid())
+  userId   String
+  groupId  String
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+}
+
+model InviteCode {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  groupId   String
+  createdBy String
+  maxUses   Int?
+  usedCount Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  creator User  @relation(fields: [createdBy], references: [id])
+
+  @@index([groupId])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  groupId   String
+  authorId  String
+  caption   String   @default("")
+  location  String?
+  takenAt   DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group     Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  author    User       @relation(fields: [authorId], references: [id])
+  images    Image[]
+  comments  Comment[]
+  reactions Reaction[]
+
+  @@index([groupId, takenAt])
+  @@index([authorId])
+}
+
+model Image {
+  id           String   @id @default(cuid())
+  postId       String
+  storageKey   String // key/path in the storage backend, backend-agnostic
+  thumbnailKey String
+  webKey       String // optimized web-sized version
+  width        Int
+  height       Int
+  bytes        Int
+  mimeType     String
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  authorId  String
+  parentId  String?
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  editedAt  DateTime?
+
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User      @relation(fields: [authorId], references: [id])
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies Comment[] @relation("CommentReplies")
+
+  @@index([postId])
+  @@index([parentId])
+}
+
+model Reaction {
+  id        String       @id @default(cuid())
+  postId    String
+  userId    String
+  type      ReactionType
+  createdAt DateTime     @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, type])
+  @@index([postId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  groupId   String?
+  type      NotificationType
+  message   String
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@index([userId, read])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  targetType String
+  targetId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([targetType, targetId])
+}
