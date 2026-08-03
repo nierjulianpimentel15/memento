@@ -51,7 +51,15 @@ function ResetPasswordForm() {
                 minLength={10}
               />
             </div>
+
             {error && <p className="text-xs text-light-gray">{error}</p>}
+
+            {!token && (
+              <p className="text-xs text-medium-gray">
+                This reset link is invalid or missing. Please request a new one.
+              </p>
+            )}
+
             <Button type="submit" className="w-full" disabled={submitting || !token}>
               {submitting ? 'Updating…' : 'Update password'}
             </Button>
